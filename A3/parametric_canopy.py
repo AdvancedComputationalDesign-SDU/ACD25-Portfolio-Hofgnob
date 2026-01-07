@@ -180,6 +180,56 @@ def surface_from_point_grid(point_grid):
     return srf
 
 
+# -------------------------------
+# 5) Uniform sampling + tessellation
+# -------------------------------
+
+def sample_surface_uniform(surface_id, divU, divV):
+    # Get surface domains
+    dom_u = rs.SurfaceDomain(surface_id, 0)
+    dom_v = rs.SurfaceDomain(surface_id, 1)
+
+    # Uniform UV grid
+    U, V = uv_grid(divU, divV)
+
+    point_grid = []
+    for i in range(divU):
+        row = []
+        for j in range(divV):
+            # Map unit UV → surface domain
+            u = dom_u[0] + U[i, j] * (dom_u[1] - dom_u[0])
+            v = dom_v[0] + V[i, j] * (dom_v[1] - dom_v[0])
+
+            pt = rs.EvaluateSurface(surface_id, u, v)
+            row.append(pt)
+        point_grid.append(row)
+
+    return point_grid
+
+
+def tessellate_panels_from_grid(point_grid):
+    panels = []
+
+    rows = len(point_grid)
+    cols = len(point_grid[0])
+
+    for i in range(rows - 1):
+        for j in range(cols - 1):
+            # Corner points of the quad
+            a = point_grid[i][j]
+            b = point_grid[i + 1][j]
+            c = point_grid[i + 1][j + 1]
+            d = point_grid[i][j + 1]
+
+            # Two triangular surfaces per quad
+            srf1 = rs.AddSrfPt([a, b, c])
+            srf2 = rs.AddSrfPt([a, c, d])
+
+            if srf1: panels.append(srf1)
+            if srf2: panels.append(srf2)
+
+    return panels
+
 ### pipeline execution ###
 
 # 1. UV grid
@@ -200,8 +250,17 @@ else:
 # 4. Surface construction
 surf = surface_from_point_grid(pts_def)
 
+# 5. Uniform sampling + tessellation
+sampled_pts = sample_surface_uniform(surf, divU, divV)
+panels_out = tessellate_panels_from_grid(sampled_pts)
+
+
 # --- outputs ---
 surface = surf
 # Flatten the nested list so Grasshopper sees a single list of points
 points = [pt for row in pts_def for pt in row] 
 height = H.flatten().tolist()
+panels = panels_out
+
+
+
