@@ -20,11 +20,12 @@ import random
 # amplitude: int
 # frequency: float
 # phase: float
+# snap_tol: Number
 
 # Outputs
-surface = [] #Rhino Surface
-points = [] #list of list of 3D points
-height = [] #2D array
+surface = [] # Rhino Surface
+points = [] # list of list of 3D points
+height = [] # 2D array
 
 def seed_everything(seed):
     if seed is None:
@@ -34,7 +35,8 @@ def seed_everything(seed):
 
 
 def uv_grid(divU, divV):
-    # Create uniform UV samples in [0,1]x[0,1].
+    # Create uniform UV samples in [0,1]x[0,1] for surface parametrization
+    # UV space standardizes sampling over any surface domain
     u = np.linspace(0.0, 1.0, divU)
     v = np.linspace(0.0, 1.0, divV)
 
@@ -56,28 +58,27 @@ def bbox_corners(geo):
 
 
 # -------------------------------
-# 1) Heightmap (placeholder)
+# 1) Heightmap (sinusoidal + radial attractor)
 # -------------------------------
 
 def heightmap(U, V, amplitude=1.0, frequency=1.0, phase=0.0):
-    # Base sinusoidal landscape
+    # Generate combined sinusoidal and radial height field
+    # Sinusoidal adds wave pattern, attractor creates central elevation focus
     H = (
         np.sin(2.0 * np.pi * frequency * U + phase) *
         np.cos(2.0 * np.pi * frequency * V + phase)
     )
-    # Radial attractor centered in UV space
     cx, cy = 0.5, 0.5
     r = np.sqrt((U - cx) ** 2 + (V - cy) ** 2)
     attractor = np.exp(-4.0 * r)
 
-    # Combine fields and scale
     H = amplitude * (0.7 * H + 0.3 * attractor)
 
     return H
 
 
 # -------------------------------
-# 2) Source point grid (planar OR sampled from surface)
+# 2) Source point grid (planar or surface-sampled)
 # -------------------------------
 
 def make_point_grid_xy(divU, divV, origin=(0.0, 0.0, 0.0), size=(100.0, 100.0)):
@@ -100,6 +101,8 @@ def make_point_grid_xy(divU, divV, origin=(0.0, 0.0, 0.0), size=(100.0, 100.0)):
 
 
 def sample_point_grid_from_surface(base_surface, U, V):
+    # Sample points from surface using UV parameters
+    # Maps normalized UV to actual surface domain for accurate sampling
     dom_u = rs.SurfaceDomain(base_surface, 0)
     dom_v = rs.SurfaceDomain(base_surface, 1)
 
@@ -131,6 +134,7 @@ def manipulate_points_z(point_grid, H):
         row = []
         for j in range(divV):
             x, y, z = point_grid[i][j]
+            # Offset point vertically by heightmap value for simple deformation
             row.append(rs.CreatePoint(x, y, z + H[i, j]))
         new_grid.append(row)
 
@@ -138,6 +142,8 @@ def manipulate_points_z(point_grid, H):
 
 
 def manipulate_points_along_normals(point_grid, H, base_surface, U, V):
+    # Offset points along surface normals scaled by heightmap
+    # Creates deformation respecting surface curvature and orientation
     dom_u = rs.SurfaceDomain(base_surface, 0)
     dom_v = rs.SurfaceDomain(base_surface, 1)
 
@@ -154,6 +160,7 @@ def manipulate_points_along_normals(point_grid, H, base_surface, U, V):
             n = rs.SurfaceNormal(base_surface, (u, v))
 
             if not n or rs.VectorLength(n) < 1e-6:
+                # If normal invalid or zero length, keep original point
                 row.append(p)
             else:
                 n_unit = rs.VectorUnitize(n)
@@ -169,19 +176,18 @@ def manipulate_points_along_normals(point_grid, H, base_surface, U, V):
 # -------------------------------
 
 def surface_from_point_grid(point_grid):
-    # Determine grid dimensions
+    # Create NURBS surface from point grid points
     rows = len(point_grid)
     if rows == 0:
         return None
     cols = len(point_grid[0])
 
-    # Flatten point grid row-wise (U-major order)
     flat_points = []
     for i in range(rows):
         for j in range(cols):
             flat_points.append(point_grid[i][j])
 
-    # Create NURBS surface from point grid
+    # Rhino expects points in (u,v) order, cols x rows grid
     srf = rs.AddSrfPtGrid((cols, rows), flat_points)
 
     return srf
@@ -192,18 +198,16 @@ def surface_from_point_grid(point_grid):
 # -------------------------------
 
 def sample_surface_uniform(surface_id, divU, divV):
-    # Get surface domains
+    # Uniformly sample surface points using UV grid
     dom_u = rs.SurfaceDomain(surface_id, 0)
     dom_v = rs.SurfaceDomain(surface_id, 1)
 
-    # Uniform UV grid
     U, V = uv_grid(divU, divV)
 
     point_grid = []
     for i in range(divU):
         row = []
         for j in range(divV):
-            # Map unit UV → surface domain
             u = dom_u[0] + U[i, j] * (dom_u[1] - dom_u[0])
             v = dom_v[0] + V[i, j] * (dom_v[1] - dom_v[0])
 
@@ -215,6 +219,8 @@ def sample_surface_uniform(surface_id, divU, divV):
 
 
 def tessellate_panels_from_grid(point_grid):
+    # Create triangular panels from quad grid cells
+    # Triangulation ensures planar panels for structural analysis
     panels = []
 
     rows = len(point_grid)
@@ -222,13 +228,11 @@ def tessellate_panels_from_grid(point_grid):
 
     for i in range(rows - 1):
         for j in range(cols - 1):
-            # Corner points of the quad
             a = point_grid[i][j]
             b = point_grid[i + 1][j]
             c = point_grid[i + 1][j + 1]
             d = point_grid[i][j + 1]
 
-            # Two triangular surfaces per quad
             srf1 = rs.AddSrfPt([a, b, c])
             srf2 = rs.AddSrfPt([a, c, d])
 
@@ -238,11 +242,14 @@ def tessellate_panels_from_grid(point_grid):
     return panels
 
 # -------------------------------
-# 6) Branching supports
+# 6) Branching supports with snapping and recursion control
 # -------------------------------
 
 def generate_supports(
     roots,
+    surface,
+    tessellation_points,
+    snap_tol=1.0,
     depth=3,
     length=6.0,
     length_reduction=0.7,
@@ -253,21 +260,42 @@ def generate_supports(
 ):
     seed_everything(seed)
     curves = []
+    used_points = set()
 
     def branch(pt, direction, curr_len, curr_depth, axis):
+        # Recursion stop on depth or length limits to prevent infinite branching
         if curr_depth <= 0 or curr_len <= 0:
             return
 
         end_pt = rs.PointAdd(pt, rs.VectorScale(direction, curr_len))
+
+        # Snap to nearest unused tessellation point within tolerance for structural connection
+        surf_pt = rs.SurfaceClosestPoint(surface, end_pt)
+        if surf_pt:
+            closest_on_surf = rs.EvaluateSurface(surface, surf_pt[0], surf_pt[1])
+            if rs.Distance(end_pt, closest_on_surf) <= snap_tol:
+
+                # Filter tessellation points not yet used for snapping
+                candidates = [
+                    p for p in tessellation_points
+                    if (p.X, p.Y, p.Z) not in used_points
+                ]
+
+                if candidates:
+                    # Reserve the snapped point to avoid multiple branches snapping to same point
+                    snap_pt = min(candidates, key=lambda p: rs.Distance(p, end_pt))
+                    used_points.add((snap_pt.X, snap_pt.Y, snap_pt.Z))
+                    crv = rs.AddLine(pt, snap_pt)
+                    if crv:
+                        curves.append(crv)
+                return
+
+        # Draw branch segment if no snapping occurred; continues branch growth
         crv = rs.AddLine(pt, end_pt)
         if crv:
             curves.append(crv)
 
-        if curr_depth == 1:
-            return
-
-
-        # Symmetrical branching with a fixed angle step
+        # Symmetrical branching with fixed angle steps for balanced structure
         if n_children == 1:
             angles = [0.0]
         else:
@@ -275,12 +303,10 @@ def generate_supports(
             start = -angle * (n_children - 1) / 2.0
             angles = [start + i * step for i in range(n_children)]
 
-        # The next brancing
+        # Rotate axis by 90 degrees around current direction to define new branching plane
         next_axis = rs.VectorRotate(axis, 90.0, direction)
-        
 
         for a in angles:
-            # child directions defined in global coordinates (not relative to parent)
             varied_angle = a + random.uniform(-angle_variation, angle_variation)
             new_dir = rs.VectorRotate(direction, varied_angle, axis)
             new_dir = rs.VectorUnitize(new_dir)
@@ -293,7 +319,7 @@ def generate_supports(
                 next_axis
             )
 
-    # first branch always vertical
+    # Start branches vertically from roots to simulate natural upward growth
     for r in roots:
         branch(r, (0, 0, 1), length, depth, (1, 0, 0))
 
@@ -309,8 +335,7 @@ U, V = uv_grid(divU, divV)
 # 2. Heightmap
 H = heightmap(U, V, amplitude, frequency, phase)
 
-# 3. Point grid (choose ONE of the following)
-
+# 3. Point grid (planar or surface sampled)
 if base_surface is not None:
     pts = sample_point_grid_from_surface(base_surface, U, V)
     pts_def = manipulate_points_along_normals(pts, H, base_surface, U, V)
@@ -318,21 +343,60 @@ else:
     pts = make_point_grid_xy(divU, divV)
     pts_def = manipulate_points_z(pts, H)
 
-# 4. Surface construction
+# 4. Surface construction from deformed points
 surf = surface_from_point_grid(pts_def)
 
 # 5. Uniform sampling + tessellation
 sampled_pts = sample_surface_uniform(surf, divU, divV)
 panels_out = tessellate_panels_from_grid(sampled_pts)
 
-# 6. Branching supports
-# Bounding-box anchors with controlled Z value
+# Extract tessellation points from panels for support snapping
+tessellation_pts = []
+
+for srf in panels_out:
+    pts = rs.SurfacePoints(srf)
+    if pts:
+        tessellation_pts.extend(pts)
+
+# 6. Branching supports with random anchors and minimum spacing
 roots_out = []
-for pt in bbox_corners(surf):
-    roots_out.append(rs.CreatePoint(pt[0], pt[1], anchor_z))
+bbox = rs.BoundingBox(surf)
+min_x = min(p[0] for p in bbox) + x_offset
+max_x = max(p[0] for p in bbox) - x_offset
+min_y = min(p[1] for p in bbox) + y_offset
+max_y = max(p[1] for p in bbox) - y_offset
+
+max_attempts = 1000
+attempts = 0
+
+while len(roots_out) < n_roots and attempts < max_attempts:
+    attempts += 1
+
+    x = random.uniform(min_x, max_x)
+    y = random.uniform(min_y, max_y)
+    candidate = rs.CreatePoint(x, y, anchor_z)
+
+    # Check candidate against existing roots to enforce minimum spacing
+    valid = True
+    for pt in roots_out:
+        # Enforce minimum distance between anchors (anchor_radius)
+        if rs.Distance(pt, candidate) < anchor_radius:
+            # Reject candidate if too close to existing root
+            valid = False
+            break
+
+    if valid:
+        roots_out.append(candidate)
+
+if len(roots_out) < n_roots:
+    # Warn if unable to place all roots due to spacing constraints
+    print("Warning: Could not place all roots with the given anchor_radius.")
 
 supports_out = generate_supports(
     roots_out,
+    surf,
+    tessellation_pts,
+    snap_tol=snap_tol,
     depth=rec_depth,
     length=br_length,
     length_reduction=len_reduct,
@@ -344,12 +408,9 @@ supports_out = generate_supports(
 
 ### outputs ###
 surface = surf
-# Flatten the nested list so Grasshopper sees a single list of points
 points = [pt for row in pts_def for pt in row] 
 height = H.flatten().tolist()
 panels = panels_out
 supports = supports_out
 roots = roots_out
-
-
-
+tessellation_points = tessellation_pts
