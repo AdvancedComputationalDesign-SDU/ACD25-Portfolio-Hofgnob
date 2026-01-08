@@ -1,5 +1,5 @@
 """
-Assignment 3: Parametric Structural Canopy — Pseudocode Scaffold
+Assignment 3: Parametric Structural Canopy
 
 Author: Jesper Christensen Sørensen
 
@@ -25,6 +25,13 @@ import random
 surface = [] #Rhino Surface
 points = [] #list of list of 3D points
 height = [] #2D array
+
+def seed_everything(seed):
+    if seed is None:
+        return
+    random.seed(seed)
+    np.random.seed(seed)
+
 
 def uv_grid(divU, divV):
     # Create uniform UV samples in [0,1]x[0,1].
@@ -230,7 +237,71 @@ def tessellate_panels_from_grid(point_grid):
 
     return panels
 
+# -------------------------------
+# 6) Branching supports
+# -------------------------------
+
+def generate_supports(
+    roots,
+    depth=3,
+    length=6.0,
+    length_reduction=0.7,
+    n_children=3,
+    angle=40.0,
+    angle_variation=5.0,
+    seed=None
+):
+    seed_everything(seed)
+    curves = []
+
+    def branch(pt, direction, curr_len, curr_depth, axis):
+        if curr_depth <= 0 or curr_len <= 0:
+            return
+
+        end_pt = rs.PointAdd(pt, rs.VectorScale(direction, curr_len))
+        crv = rs.AddLine(pt, end_pt)
+        if crv:
+            curves.append(crv)
+
+        if curr_depth == 1:
+            return
+
+
+        # Symmetrical branching with a fixed angle step
+        if n_children == 1:
+            angles = [0.0]
+        else:
+            step = angle
+            start = -angle * (n_children - 1) / 2.0
+            angles = [start + i * step for i in range(n_children)]
+
+        # The next brancing
+        next_axis = rs.VectorRotate(axis, 90.0, direction)
+        
+
+        for a in angles:
+            # child directions defined in global coordinates (not relative to parent)
+            varied_angle = a + random.uniform(-angle_variation, angle_variation)
+            new_dir = rs.VectorRotate(direction, varied_angle, axis)
+            new_dir = rs.VectorUnitize(new_dir)
+
+            branch(
+                end_pt,
+                new_dir,
+                curr_len * length_reduction,
+                curr_depth - 1,
+                next_axis
+            )
+
+    # first branch always vertical
+    for r in roots:
+        branch(r, (0, 0, 1), length, depth, (1, 0, 0))
+
+    return curves
+
+
 ### pipeline execution ###
+seed_everything(seed)
 
 # 1. UV grid
 U, V = uv_grid(divU, divV)
@@ -254,13 +325,31 @@ surf = surface_from_point_grid(pts_def)
 sampled_pts = sample_surface_uniform(surf, divU, divV)
 panels_out = tessellate_panels_from_grid(sampled_pts)
 
+# 6. Branching supports
+# Bounding-box anchors with controlled Z value
+roots_out = []
+for pt in bbox_corners(surf):
+    roots_out.append(rs.CreatePoint(pt[0], pt[1], anchor_z))
 
-# --- outputs ---
+supports_out = generate_supports(
+    roots_out,
+    depth=rec_depth,
+    length=br_length,
+    length_reduction=len_reduct,
+    n_children=n_branches,
+    angle=angle,
+    angle_variation=angle_variation,
+    seed=seed
+)
+
+### outputs ###
 surface = surf
 # Flatten the nested list so Grasshopper sees a single list of points
 points = [pt for row in pts_def for pt in row] 
 height = H.flatten().tolist()
 panels = panels_out
+supports = supports_out
+roots = roots_out
 
 
 
