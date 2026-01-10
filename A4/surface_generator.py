@@ -83,15 +83,12 @@ def heightmap(
 # -----------------------------------------------------------------------------
 
 def compute_height_field(H):
-    """Return height scalar field."""
+    # return height field as is
     return H
 
 
 def compute_slope_field(H, U, V):
-    """
-    Compute slope (gradient) field from heightmap.
-    Returns a vector field (du, dv) at each UV sample.
-    """
+    # compute gradient of height field as slope field
     du = np.gradient(H, axis=0)
     dv = np.gradient(H, axis=1)
     return du, dv
@@ -233,13 +230,7 @@ H = heightmap(U, V, amplitude, frequency, phase, radial_strength, radial_falloff
 height_field = compute_height_field(H)
 slope_u, slope_v = compute_slope_field(H, U, V)
 
-fields = {
-    "height": height_field,
-    "slope_u": slope_u,
-    "slope_v": slope_v,
-    "U": U,
-    "V": V
-}
+
 
 # 3. Point grid (planar or surface sampled)
 if base_surface is not None:
@@ -256,4 +247,7 @@ surf = surface_from_point_grid(pts_def)
 surface = surf
 points = [pt for row in pts_def for pt in row]
 height = H.flatten().tolist()
-fields = fields
+slope_u = slope_u.flatten().tolist()
+slope_v = slope_v.flatten().tolist()
+U = U.flatten().tolist()
+V = V.flatten().tolist()
