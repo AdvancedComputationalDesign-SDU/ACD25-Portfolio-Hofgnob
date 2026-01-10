@@ -55,8 +55,11 @@ def bbox_corners(geo):
 
     return anchors
 
+# -------------------------------
+# 1) Heightmap generation
+# -------------------------------
 
- # Generate scalar height field from sinusoidal + radial + noise components
+# Generate scalar height field from sinusoidal + radial + noise components
 def heightmap(
     U, V,
     amplitude=1.0,
@@ -96,7 +99,7 @@ def heightmap(
 # 2) Source point grid (planar or surface-sampled)
 # -------------------------------
 
- # Generate planar XY grid of points
+# Generate planar XY grid of points
 def make_point_grid_xy(divU, divV, origin=(0.0, 0.0, 0.0), size=(100.0, 100.0)):
     ox, oy, oz = origin
     sx, sy = size
