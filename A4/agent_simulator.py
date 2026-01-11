@@ -49,11 +49,30 @@ if agents is not None:
         # draw velocity vector on surface
         if draw_vectors:
             try:
-                end_u = agent.u + agent.velocity[0]
-                end_v = agent.v + agent.velocity[1]
-                end = rs.EvaluateSurface(agent.surface, end_u, end_v)
-                if end:
-                    vectors.append(rs.AddLine(agent.position, end))
+                # real surface domains
+                dom_u = rs.SurfaceDomain(agent.surface, 0)
+                dom_v = rs.SurfaceDomain(agent.surface, 1)
+
+                # start at the agent's true 3D position (already evaluated on surface)
+                start = agent.position
+
+                # take a small step in normalized UV along the velocity direction
+                u2 = agent.u + agent.velocity[0]
+                v2 = agent.v + agent.velocity[1]
+
+                # clamp to normalized domain
+                u2 = max(0.0, min(1.0, u2))
+                v2 = max(0.0, min(1.0, v2))
+
+                # map normalized UV to real surface UV
+                u2_real = dom_u[0] + u2 * (dom_u[1] - dom_u[0])
+                v2_real = dom_v[0] + v2 * (dom_v[1] - dom_v[0])
+
+                # evaluate end point on surface
+                end = rs.EvaluateSurface(agent.surface, u2_real, v2_real)
+
+                if start and end:
+                    vectors.append(rs.AddLine(start, end))
             except:
                 pass
 

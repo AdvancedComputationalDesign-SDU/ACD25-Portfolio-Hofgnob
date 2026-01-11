@@ -41,43 +41,53 @@ agents = []
 # -----------------------------------------------------------------------------
 
 def compute_fields_from_surface(surface, divU, divV):
-    # Compute height field (Z) and slope (gradient in UV) from a surface.
-    if surface is None or divU is None or divV is None:
-        return None, None, None
+    # Compute a curvature-based flow field from a surface.
+    # Returns two direction fields (flow_u, flow_v) in normalized UV space.
 
-    try:
-        divU = int(divU)
-        divV = int(divV)
-        if divU < 2 or divV < 2:
-            return None, None, None
+    divU = int(divU)
+    divV = int(divV)
 
-        # Surface domains
-        dom_u = rs.SurfaceDomain(surface, 0)
-        dom_v = rs.SurfaceDomain(surface, 1)
+    # Coerce surface and get domains
+    surf = rs.coercesurface(surface)
+    dom_u = rs.SurfaceDomain(surf, 0)
+    dom_v = rs.SurfaceDomain(surf, 1)
 
-        # Normalized UV grids in [0,1]
-        u_lin = np.linspace(0.0, 1.0, divU)
-        v_lin = np.linspace(0.0, 1.0, divV)
-        U, V = np.meshgrid(u_lin, v_lin, indexing="ij")
+    # Normalized UV grids in [0,1]
+    u_lin = np.linspace(0.0, 1.0, divU)
+    v_lin = np.linspace(0.0, 1.0, divV)
+    U, V = np.meshgrid(u_lin, v_lin, indexing="ij")
 
-        # Sample surface and build height field (use Z as height)
-        H = np.zeros((divU, divV), dtype=float)
-        for i in range(divU):
-            for j in range(divV):
-                u = dom_u[0] + U[i, j] * (dom_u[1] - dom_u[0])
-                v = dom_v[0] + V[i, j] * (dom_v[1] - dom_v[0])
-                pt = rs.EvaluateSurface(surface, u, v)
-                if pt is None:
-                    return None, None, None
-                H[i, j] = pt[2]
+    # Build a direction field from surface normals (projected to UV plane)
+    flow_u = np.zeros((divU, divV), dtype=float)
+    flow_v = np.zeros((divU, divV), dtype=float)
 
-        # Compute slope (gradient) in UV space
-        slope_u = np.gradient(H, axis=0)
-        slope_v = np.gradient(H, axis=1)
+    for i in range(divU):
+        for j in range(divV):
+            u = dom_u[0] + U[i, j] * (dom_u[1] - dom_u[0])
+            v = dom_v[0] + V[i, j] * (dom_v[1] - dom_v[0])
 
-        return H, slope_u, slope_v
-    except Exception:
-        return None, None, None
+            # Evaluate surface and normal
+            pt = rs.EvaluateSurface(surf, u, v)
+            if pt is None:
+                continue
+
+            normal = rs.SurfaceNormal(surf, (u, v))
+            if normal is None:
+                continue
+
+            # Project normal onto XY plane to get a tangential flow direction
+            nx, ny, nz = normal
+            d = np.array([-nx, -ny], dtype=float)
+
+            # Normalize direction
+            length = np.linalg.norm(d)
+            if length > 1e-6:
+                d /= length
+
+            flow_u[i, j] = d[0]
+            flow_v[i, j] = d[1]
+
+    return flow_u, flow_v
 
 # -----------------------------------------------------------------------------
 # Core agent class
@@ -87,17 +97,20 @@ class Agent(object):
     def __init__(self, surface, u, v, H, slope_u, slope_v, max_age=100):
         # Surface attributes
         self.surface = rs.coercesurface(surface)
+        self.dom_u = rs.SurfaceDomain(self.surface, 0)
+        self.dom_v = rs.SurfaceDomain(self.surface, 1)
         self.u = u
         self.v = v
         # Cached UV indices for field sampling
         self.u_idx = 0
         self.v_idx = 0
-        # Environmental fields
-        self.H = H
-        self.slope_u = slope_u
-        self.slope_v = slope_v
-        # Position on surface
-        self.position = rs.EvaluateSurface(self.surface, self.u, self.v)
+        # Environmental flow field (curvature-based)
+        self.flow_u = H
+        self.flow_v = slope_u
+        # Position on surface (map normalized UV to real surface domain)
+        u_real = self.dom_u[0] + self.u * (self.dom_u[1] - self.dom_u[0])
+        v_real = self.dom_v[0] + self.v * (self.dom_v[1] - self.dom_v[0])
+        self.position = rs.EvaluateSurface(self.surface, u_real, v_real)
         self.velocity = [
             random.uniform(-0.01, 0.01),
             random.uniform(-0.01, 0.01)
@@ -111,51 +124,88 @@ class Agent(object):
         self.path = [self.position]
 
     def sense(self):
-        # read height and slope at current position (grid sample)
-        if self.H is None or self.slope_u is None or self.slope_v is None:
-            return None, (0.0, 0.0)
-        h = self.H[self.v_idx, self.u_idx]
-        slope = (self.slope_u[self.v_idx, self.u_idx], self.slope_v[self.v_idx, self.u_idx])
-        return h, slope
+        # read flow direction at current grid cell
+        if self.flow_u is None or self.flow_v is None:
+            return (0.0, 0.0)
+        
+        du = self.flow_u[self.u_idx, self.v_idx]
+        dv = self.flow_v[self.u_idx, self.v_idx]
+        noise_strength = 0.01
+        du += random.uniform(-noise_strength, noise_strength)
+        dv += random.uniform(-noise_strength, noise_strength)
+        return (du, dv)
 
-    def decide(self, h, slope):
-        du, dv = slope
-        # move downhill along slope
-        self.velocity[0] += du * 0.5
-        self.velocity[1] += dv * 0.5
+    def decide(self, flow):
+        du, dv = flow
+
+        # Integration parameters
+        damping = 0.9
+        strength = 0.02
+        max_speed = 0.02
+
+        # Integrate velocity with damping
+        self.velocity[0] = self.velocity[0] * damping + du * strength
+        self.velocity[1] = self.velocity[1] * damping + dv * strength
+
+        # Clamp speed
+        speed = (self.velocity[0] ** 2 + self.velocity[1] ** 2) ** 0.5
+        if speed > max_speed:
+            self.velocity[0] = self.velocity[0] / speed * max_speed
+            self.velocity[1] = self.velocity[1] / speed * max_speed
+
         return self.velocity
 
     def move(self):
-        # Move in UV space
+        # Move in normalized UV space
         self.u += self.velocity[0]
         self.v += self.velocity[1]
-        # Keep agents within surface
-        self.u = max(0.0, min(1.0, self.u))
-        self.v = max(0.0, min(1.0, self.v))
+
+        # Bounce on U boundaries
+        if self.u < 0.0:
+            self.u = 0.0
+            self.velocity[0] *= -1.0
+        elif self.u > 1.0:
+            self.u = 1.0
+            self.velocity[0] *= -1.0
+
+        # Bounce on V boundaries
+        if self.v < 0.0:
+            self.v = 0.0
+            self.velocity[1] *= -1.0
+        elif self.v > 1.0:
+            self.v = 1.0
+            self.velocity[1] *= -1.0
+
         # Update field indices
         self.update_field_indices()
+        # Map normalized UV to real surface domain
+        u_real = self.dom_u[0] + self.u * (self.dom_u[1] - self.dom_u[0])
+        v_real = self.dom_v[0] + self.v * (self.dom_v[1] - self.dom_v[0])
+
         # Project back to surface
-        self.position = rs.EvaluateSurface(self.surface, self.u, self.v)
+        self.position = rs.EvaluateSurface(self.surface, u_real, v_real)
+
         # Store path history
         self.path.append(self.position)
+
         return self.position
 
     def update_field_indices(self):
         # Map continuous UV [0,1] to discrete field indices
-        if self.H is None:
+        if self.flow_u is None:
             return
-        rows, cols = self.H.shape
-        self.u_idx = int(max(0, min(cols - 1, round(self.u * (cols - 1)))))
-        self.v_idx = int(max(0, min(rows - 1, round(self.v * (rows - 1)))))
+        rows, cols = self.flow_u.shape
+        self.u_idx = int(max(0, min(rows - 1, round(self.u * (rows - 1)))))
+        self.v_idx = int(max(0, min(cols - 1, round(self.v * (cols - 1)))))
 
     def update(self, agents):
         # Update agent state
         if not self.alive:
             return
         # senses environment
-        h, slope = self.sense()
-        # decides on action based on sensed data
-        self.decide(h, slope)
+        flow = self.sense()
+        # decides on action based on sensed flow
+        self.decide(flow)
         # moves according to decision
         self.move()
         # ages the agent
@@ -169,14 +219,14 @@ class Agent(object):
 # Factory for creating agents
 # -----------------------------------------------------------------------------
 def build_agents(surface, divU, divV, num_agents):
-    H, slope_u, slope_v = compute_fields_from_surface(surface, divU, divV)
-    if H is None or slope_u is None or slope_v is None:
+    flow_u, flow_v = compute_fields_from_surface(surface, divU, divV)
+    if flow_u is None or flow_v is None:
         return []
     agents = []
     for _ in range(int(num_agents)):
         u = random.uniform(0.0, 1.0)
         v = random.uniform(0.0, 1.0)
-        agent = Agent(surface, u, v, H, slope_u, slope_v)
+        agent = Agent(surface, u, v, flow_u, flow_v, None)
         # initialize field indices for first sense()
         agent.update_field_indices()
         agents.append(agent)
