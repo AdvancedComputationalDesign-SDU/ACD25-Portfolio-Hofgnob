@@ -31,6 +31,7 @@ seed_everything(42)
 # divU (int)
 # divV (int)
 # num_agents (int)
+# max_age (int)
 # reset (bool)
 
 ### Outputs ###
@@ -94,7 +95,7 @@ def compute_fields_from_surface(surface, divU, divV):
 # -----------------------------------------------------------------------------
 class Agent(object):
 # Agent moving on a surface influenced by environmental fields
-    def __init__(self, surface, u, v, H, slope_u, slope_v, max_age=100):
+    def __init__(self, surface, u, v, H, slope_u, slope_v, max_age):
         # Surface attributes
         self.surface = rs.coercesurface(surface)
         self.dom_u = rs.SurfaceDomain(self.surface, 0)
@@ -107,6 +108,10 @@ class Agent(object):
         # Environmental flow field (curvature-based)
         self.flow_u = H
         self.flow_v = slope_u
+
+        # Shared coverage (pheromone) field
+        self.coverage = slope_v
+
         # Position on surface (map normalized UV to real surface domain)
         u_real = self.dom_u[0] + self.u * (self.dom_u[1] - self.dom_u[0])
         v_real = self.dom_v[0] + self.v * (self.dom_v[1] - self.dom_v[0])
@@ -124,15 +129,32 @@ class Agent(object):
         self.path = [self.position]
 
     def sense(self):
-        # read flow direction at current grid cell
+        # Read curvature flow direction
         if self.flow_u is None or self.flow_v is None:
             return (0.0, 0.0)
-        
+
         du = self.flow_u[self.u_idx, self.v_idx]
         dv = self.flow_v[self.u_idx, self.v_idx]
-        noise_strength = 0.01
-        du += random.uniform(-noise_strength, noise_strength)
-        dv += random.uniform(-noise_strength, noise_strength)
+
+        # Push away from visited areas using coverage field
+        if self.coverage is not None:
+            rows, cols = self.coverage.shape
+            u = self.u_idx
+            v = self.v_idx
+
+            # Sample local gradient of coverage field
+            u_prev = max(0, u - 1)
+            u_next = min(rows - 1, u + 1)
+            v_prev = max(0, v - 1)
+            v_next = min(cols - 1, v + 1)
+
+            dc_u = self.coverage[u_next, v] - self.coverage[u_prev, v]
+            dc_v = self.coverage[u, v_next] - self.coverage[u, v_prev]
+
+            # Repel from high-density regions
+            du -= dc_u * 0.05
+            dv -= dc_v * 0.05
+
         return (du, dv)
 
     def decide(self, flow):
@@ -141,13 +163,13 @@ class Agent(object):
         # Integration parameters
         damping = 0.9
         strength = 0.02
-        max_speed = 0.02
+        max_speed = 0.03
 
         # Integrate velocity with damping
         self.velocity[0] = self.velocity[0] * damping + du * strength
         self.velocity[1] = self.velocity[1] * damping + dv * strength
 
-        # Clamp speed
+        # Set speed limit
         speed = (self.velocity[0] ** 2 + self.velocity[1] ** 2) ** 0.5
         if speed > max_speed:
             self.velocity[0] = self.velocity[0] / speed * max_speed
@@ -198,6 +220,10 @@ class Agent(object):
         self.u_idx = int(max(0, min(rows - 1, round(self.u * (rows - 1)))))
         self.v_idx = int(max(0, min(cols - 1, round(self.v * (cols - 1)))))
 
+        # Deposit pheromone at current cell
+        if self.coverage is not None:
+            self.coverage[self.u_idx, self.v_idx] += 1.0
+
     def update(self, agents):
         # Update agent state
         if not self.alive:
@@ -218,15 +244,19 @@ class Agent(object):
 # -----------------------------------------------------------------------------
 # Factory for creating agents
 # -----------------------------------------------------------------------------
-def build_agents(surface, divU, divV, num_agents):
+def build_agents(surface, divU, divV, num_agents, max_age):
     flow_u, flow_v = compute_fields_from_surface(surface, divU, divV)
     if flow_u is None or flow_v is None:
         return []
+
+    # Coverage (pheromone) field: tracks visited density
+    coverage = np.zeros_like(flow_u, dtype=float)
+
     agents = []
     for _ in range(int(num_agents)):
         u = random.uniform(0.0, 1.0)
         v = random.uniform(0.0, 1.0)
-        agent = Agent(surface, u, v, flow_u, flow_v, None)
+        agent = Agent(surface, u, v, flow_u, flow_v, coverage, max_age)
         # initialize field indices for first sense()
         agent.update_field_indices()
         agents.append(agent)
@@ -237,9 +267,9 @@ def build_agents(surface, divU, divV, num_agents):
 # -----------------------------------------------------------------------------
 
 class MyComponent(Grasshopper.Kernel.GH_ScriptInstance):
-    def RunScript(self, surface, divU: int, divV: int, num_agents: int, reset: bool):
+    def RunScript(self, surface, divU: int, divV: int, num_agents: int, max_age: int, reset: bool):
         if reset or not hasattr(self, "agents"):
-            self.agents = build_agents(surface, divU, divV, num_agents)
+            self.agents = build_agents(surface, divU, divV, num_agents, max_age)
         
         # Update all agents
         for agent in self.agents:
