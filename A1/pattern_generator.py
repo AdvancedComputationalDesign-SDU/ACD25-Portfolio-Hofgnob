@@ -12,7 +12,8 @@ canvas_height = 500
 canvas_width = canvas_height
 # Create a 2D array of zeros with shape (canvas_height, canvas_width)
 canvas = np.zeros((canvas_height, canvas_width))
-
+# Create an explicit RGB canvas (H, W, 3)
+canvas_rgb = np.zeros((canvas_height, canvas_width, 3))
 
 # --------------- 2 ---------------
 # Attractor Influence Section with Grid Pattern
@@ -41,31 +42,43 @@ for x in range(canvas_width):
     for y in range(canvas_height):
         # Calculate distances from current pixel to all attractor points
         dists = distance(np.array([x, y]), attractors)
-        # Determine pixel intensity using sine of the minimum distance (smooth gradient)
-        color = np.sin(np.min(dists * 0.5)) 
-        # Assign calculated color value to the canvas at position (y, x)
-        canvas[y, x] = color
+        # Normalize pixel coordinates to range [0, 1]
+        nx = x / canvas_width
+        ny = y / canvas_height
+        # Compute minimum and mean distances to attractors
+        min_dist = np.min(dists)
+        mean_dist = np.mean(dists)
+        # Add gradient and noise components to create pattern
+        gradient = np.sin(nx * np.pi * 2) * np.cos(ny * np.pi * 2)
+        noise_field = np.sin(nx * 12.3 + ny * 4.7)
+        # Combine components with specific weights to form final field value
+        field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
+        # Map field value to RGB channels using sine and cosine functions
+        r = (np.sin(field * 2.0) + 1) * 0.5
+        g = (np.cos(field * 1.5) + 1) * 0.5
+        b = (np.sin(field * 1.2 + np.pi/3) + 1) * 0.5
+        canvas_rgb[y, x, 0] = r
+        canvas_rgb[y, x, 1] = g
+        canvas_rgb[y, x, 2] = b
+
 
 
 # --------------- 5 ---------------
-# Adding Noise Section
-# Generate random noise array with values in range [-2.5, 2.5]
-noise = (np.random.rand(canvas_height, canvas_width) - 0.5) * 5.0 
-# Blend the noise with the canvas values (75% original, 25% noise)
-canvas = canvas * 0.75 + noise * 0.25
+# Add independent noise per RGB channel
+noise_rgb = (np.random.rand(canvas_height, canvas_width, 3) - 0.5) * 0.5
+canvas_rgb = canvas_rgb * 0.75 + noise_rgb * 0.25
 
 
 # --------------- 6 ---------------
 # Normalize canvas values to range [0, 1] to ensure valid color mapping
-canvas_normalized = (canvas - canvas.min()) / (canvas.max() - canvas.min())
-
+canvas_normalized = (canvas_rgb - canvas_rgb.min()) / (canvas_rgb.max() - canvas_rgb.min())
 
 # --------------- 7 ---------------
-# Display the canvas as an image using the 'magma' colormap
-plt.imshow(canvas_normalized, cmap='magma') 
+# Display true RGB image (no colormap)
+plt.imshow(canvas_normalized)
 # Hide axis ticks and labels for cleaner visualization
 plt.axis('off') 
 # Show the generated image
 plt.show()
 # Save the image to the images folder with tight bounding box and no padding
-plt.savefig('images/attractor_grid_pattern.png', bbox_inches='tight', pad_inches=0)
+# plt.savefig('images/attractor_grid_pattern.png', bbox_inches='tight', pad_inches=0)

@@ -109,7 +109,7 @@ class Agent(object):
         self.flow_u = H
         self.flow_v = slope_u
 
-        # Shared coverage (pheromone) field
+        # Shared coverage field
         self.coverage = slope_v
 
         # Position on surface (map normalized UV to real surface domain)
