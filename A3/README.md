@@ -170,21 +170,18 @@ The system outputs all intermediate and final geometry explicitly: canopy surfac
 
 ### Final results
 **Result 1 - baseline**
-Baseline 
  ![Perspective view](images/result_1_perspective.png)
  ![Right view](images/result_1_right.png)
  ![Front view](images/result_1_front.png)
  ![Isometric view](images/result_1_isometric.png)
 
 **Result 2 - Supports and tessellation changed**
-Tessellation and support changed
  ![Perspective view](images/result_2_perspective.png)
  ![Right view](images/result_2_right.png)
  ![Front view](images/result_2_front.png)
  ![Isometric view](images/result_2_isometric.png)
 
 **Result 3 - Supports and heightmap changed**
-Heightmap and support changed
  ![Perspective view](images/result_3_perspective.png)
  ![Right view](images/result_3_right.png)
  ![Front view](images/result_3_front.png)
