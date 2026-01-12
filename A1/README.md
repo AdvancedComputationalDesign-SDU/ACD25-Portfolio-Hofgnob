@@ -9,7 +9,7 @@ search_exclude: false
 
 # Assignment 1: NumPy Array Manipulation for 2D Pattern Generation
 
-[View on GitHub]({{ site.github.repository_url }})
+[View on GitHub]({{https://github.com/AdvancedComputationalDesign-SDU/ACD25-Portfolio-Hofgnob/tree/main/A1}})
 
 ![Example Image](images/perlin_moire.png)
 
@@ -133,6 +133,6 @@ This approach demonstrates explicit RGB channel construction, layered field comp
 ## References
 
 - NumPy Documentation: [Array Manipulation Routines](https://numpy.org/doc/stable/reference/routines.array-manipulation.html)
-- Matplotlib Documentation: [Colormaps](https://matplotlib.org/stable/contents.html)
+- Matplotlib Documentation: [Matplotlib Documentation](https://matplotlib.org/stable/contents.html)
 
 ---

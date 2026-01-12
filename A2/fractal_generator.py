@@ -14,9 +14,7 @@ from shapely.geometry import LineString
 from shapely.affinity import rotate, translate
 import random
 
-# ============================================================
 # CONFIGURATION PARAMETERS
-# ============================================================
 
 ### Randomness ###
 random_seed = 122                 # Seed for reproducible results
@@ -61,14 +59,16 @@ max_thickness = 5.0               # Maximum branch thickness
 random.seed(random_seed)
 global_wind_strength = random.uniform(*global_wind_strength_range)
 
+
 # Store all generated line segments with depth for thickness control
 line_list = []  # each entry: (LineString, depth)
 
+# Color mapping function based on depth
 def get_color(depth, max_depth):
     # Map recursion depth to a color using a perceptual colormap.
     return plt.cm.viridis((depth / max_depth)**0.4)
 
-
+# Recursive fractal generation function
 def generate_fractal(start_point, angle, length, depth, max_depth,
                      angle_change, length_scaling_factor,
                      wind_vector, attractors, min_distance=5):
@@ -100,6 +100,7 @@ def generate_fractal(start_point, angle, length, depth, max_depth,
         # Vector from current point to attractor (pull towards)
         vec_x = ax - start_point[0]
         vec_y = ay - start_point[1]
+        # Compute distance to attractor using Euclidean norm
         distance = math.hypot(vec_x, vec_y)
         if distance > 0:
             # Region-aware attractor amplification
@@ -107,7 +108,7 @@ def generate_fractal(start_point, angle, length, depth, max_depth,
             if distance < attractor_radius:
                 local_strength *= attractor_boost
 
-            influence = min((12 / distance) * local_strength, 0.12 * local_strength)
+            influence = min((10 / distance) * local_strength, 0.10 * local_strength)
             angle_to_attractor = math.degrees(math.atan2(vec_y, vec_x))
             # Blend the angle toward the attractor
             angle = (1 - influence) * angle + influence * angle_to_attractor
@@ -161,7 +162,7 @@ def generate_fractal(start_point, angle, length, depth, max_depth,
                 (
                     end_point,
                     angle + random.uniform(-angle_change, angle_change),
-                    new_length * random.uniform(0.7, 0.95),
+                    new_length * random.uniform(0.7, 0.9),
                     next_depth
                 )
         )
@@ -176,21 +177,22 @@ if __name__ == "__main__":
 
     # Generate tree start points using min / max distance constraints
     start_points = []
-
+    # Accumulate x positions
     current_x = 0.0
     for _ in range(num_trees):
         if start_points:
             step = random.uniform(min_tree_distance, max_tree_distance)
             current_x += step
-
+        # Add trunk start point
         start_points.append((current_x, 0.0))
 
     # Create attractor points aligned with tree span
     tree_x_values = [p[0] for p in start_points]
     min_x, max_x = min(tree_x_values), max(tree_x_values)
-
+    # Generate attractor points
     attractors = [
         (
+            # x range for attractors
             random.uniform(min_x, max_x),
             # y range for attractors
             random.uniform(300, 450)
@@ -207,10 +209,10 @@ if __name__ == "__main__":
     for sp in start_points:
         growth_queue.append((sp, 90, 100, 0)) # start_point, angle, length, depth
 
-    # Fully grow the fractal (static, no animation)
+    # Fully grow the fractal
     while growth_queue:
         start_point, angle, length, depth = growth_queue.pop(0)
-
+        # Generate child branches
         children = generate_fractal(
             start_point=start_point,
             angle=angle,
@@ -243,18 +245,18 @@ if __name__ == "__main__":
         ax.plot(x, y, color=color, linewidth=linewidth)
 
     # Visualize attractors
-    # ax.scatter(
-    #     [a[0] for a in attractors],
-    #     [a[1] for a in attractors],
-    #     color='red',
-    #     s=60,
-    #     marker='.',
-    #     zorder=4,
-    #     label='Attractors'
-    # )
+    ax.scatter(
+        [a[0] for a in attractors],
+        [a[1] for a in attractors],
+        color='red',
+        s=60,
+        marker='.',
+        zorder=4,
+        label='Attractors'
+    )
 
 # Customize the plot
-# ax.legend(loc='lower left')
+ax.legend(loc='lower left')
 ax.set_aspect('equal', adjustable='box')
 ax.axis('off')
 plt.margins(0)
@@ -269,12 +271,12 @@ images_dir = os.path.join(base_dir, "images")
 os.makedirs(images_dir, exist_ok=True)
 
 # Full output path
-output_path = os.path.join(images_dir, "result_4_mixed_wind_attractors_seed_122.png")
+output_path = os.path.join(images_dir, "resultX.png")
 
 plt.savefig(
     output_path,
     pad_inches=0,
     dpi=300
 )
-
+# Show the plot
 plt.show()
