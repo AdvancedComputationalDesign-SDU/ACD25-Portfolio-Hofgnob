@@ -2,7 +2,6 @@
 Assignment 3: Parametric Structural Canopy
 
 Author: Jesper Christensen Sørensen
-
 """
 
 #r: numpy
@@ -14,12 +13,35 @@ import random
 # Helpers
 # -------------------------------
 
-# Outputs
-surface = [] # Rhino Surface
-points = [] # list of list of 3D points
-height = [] # 2D array
-panels = []
-micro_panels = []  # secondary infill panels between original cell and inset panel
+# -------------------------------
+# Grasshopper inputs
+# -------------------------------
+# base_surface        : Rhino Surface or None — optional reference surface
+# divU, divV          : int — resolution of UV grid and surface sampling
+#
+# amplitude           : float — global heightmap scale
+# frequency           : float — sinusoidal wave frequency
+# phase               : float — phase offset for sinusoidal heightmap
+# radial_strength     : float — weight of radial attractor component
+# radial_falloff      : float — radial decay controlling central influence
+# noise_strength      : float — amplitude of stochastic height variation
+#
+# n_gon               : int — panel topology (3 = triangles, 4 = quads)
+# panel_scale         : float — inset scale for panels (1.0 = no inset)
+#
+# rec_depth           : int — recursion depth of branching supports
+# br_length           : float — initial branch length
+# len_reduct          : float — branch length reduction per recursion
+# n_branches          : int — number of child branches per node
+# angle               : float — branching angle in degrees
+# angle_variation     : float — random angular deviation per branch
+#
+# n_roots             : int — number of support root points
+# z_roots             : float — Z-height of support roots
+# anchor_radius       : float — minimum spacing between roots
+# jitter_strength     : float — positional randomness of root placement
+# x_offset, y_offset  : float — directional envelope scaling factors
+# seed                : int or None — random seed for reproducibility
 
 # Set random seeds for reproducible results
 def seed_everything(seed):
@@ -41,19 +63,6 @@ def uv_grid(divU, divV):
     U, V = np.meshgrid(u, v, indexing="ij")
 
     return U, V
-
-
- # Extract ground-level bounding box anchor points
-def bbox_corners(geo):
-    # Get bounding box corners (returns 8 points)
-    bbox = rs.BoundingBox(geo)
-    if not bbox or len(bbox) < 8:
-        raise ValueError("Invalid geometry or bounding box could not be computed")
-
-    # Choose four ground-level corners as support anchors
-    anchors = [bbox[0], bbox[1], bbox[2], bbox[3]]
-
-    return anchors
 
 # -------------------------------
 # 1) Heightmap generation
@@ -365,7 +374,9 @@ def tessellate_panels_from_grid(point_grid, base_surface, n_gon, panel_scale=1.0
 
  # Estimate horizontal envelope reach of branching structure
 def estimate_branching_envelope(depth, length, reduction, angle):
+    # Squared horizontal contributions
     sq = 0.0
+    # Current branch length
     curr = length
     # Sum horizontal contributions at each branching level
     for _ in range(depth):
@@ -382,7 +393,7 @@ def estimate_branching_envelope(depth, length, reduction, angle):
  # Generate recursive branching support structure
 def generate_supports(
     roots,
-    tessellation_points,
+    target_surface,
     depth,
     length,
     length_reduction,
@@ -403,10 +414,24 @@ def generate_supports(
         # End point calculation
         end_pt = rs.PointAdd(pt, rs.VectorScale(direction, curr_len))
 
-        # Snap only at terminal depth
+        # Snap only at terminal depth: project to surface and align to panel normal midpoint
         if curr_depth == 1:
-            idx = rs.PointArrayClosestPoint(tessellation_points, end_pt)
-            snap = tessellation_points[idx]
+            # Find closest UV on surface
+            uv = rs.SurfaceClosestPoint(target_surface, end_pt)
+            if not uv:
+                return
+
+            # Evaluate surface point and normal
+            surf_pt = rs.EvaluateSurface(target_surface, uv[0], uv[1])
+            normal = rs.SurfaceNormal(target_surface, (uv[0], uv[1]))
+            if not normal or rs.VectorLength(normal) < 1e-6:
+                return
+
+            normal = rs.VectorUnitize(normal)
+
+            # Optional small offset along normal to emphasize attachment
+            snap = rs.PointAdd(surf_pt, rs.VectorScale(normal, 0.0))
+
             key = (snap.X, snap.Y, snap.Z)
             if key not in used:
                 used.add(key)
@@ -547,7 +572,7 @@ if len(roots_out) < n_roots:
 
 supports_out, supports_with_depth = generate_supports(
     roots_out,
-    tessellation_pts,
+    surf,
     depth=rec_depth,
     length=br_length,
     length_reduction=len_reduct,
@@ -562,13 +587,15 @@ support_depth_values = []
 for crv, d in supports_with_depth:
     support_depth_values.append(float(d) / max(1.0, rec_depth))
 
-### outputs ###
-surface = surf
-points = [pt for row in pts_def for pt in row] 
-height = H.flatten().tolist()
-panels = panels_out
-micro_panels = micro_panels
-supports = supports_out
-roots = roots_out
-tessellation_points = tessellation_pts
-support_depth = support_depth_values
+# -------------------------------
+# Grasshopper outputs
+# -------------------------------
+surface = surf                                  # NURBS Surface — final canopy surface geometry
+points = [pt for row in pts_def for pt in row]  # list[Point3d] — deformed canopy point grid (flattened)
+height = H.flatten().tolist()                   # list[float] — heightmap scalar values per grid point
+panels = panels_out                             # list[Curve] — primary canopy panel polylines
+micro_panels = micro_panels                     # list[Curve] — secondary inset micro-panel geometry
+supports = supports_out                         # list[Curve] — recursive branching support curves
+roots = roots_out                               # list[Point3d] — support root anchor points
+tessellation_points = tessellation_pts          # list[Point3d] — panel corner points for snapping/reference
+support_depth = support_depth_values            # list[float] — normalized recursion depth per support (0–1)
