@@ -9,7 +9,7 @@ search_exclude: false
 
 # Assignment 4: Agent-Based Modeling for Surface Panelization
 
-[View on GitHub]({{ site.github.repository_url }})
+[View on GitHub]({{https://github.com/AdvancedComputationalDesign-SDU/ACD25-Portfolio-Hofgnob/tree/main/A4}})
 
 ![Example Structural Panelization](images/agent_based.jpg)
 
