@@ -82,3 +82,8 @@ if agents is not None:
                 curves.append(rs.AddPolyline(agent.path))
             except:
                 pass
+
+# Outputs (Grasshopper)
+points = points
+vectors = vectors
+curves = curves

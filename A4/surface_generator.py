@@ -11,12 +11,6 @@ import rhinoscriptsyntax as rs
 import numpy as np
 import random
 
-# Outputs
-surface = None          # Rhino Surface
-points = []             # list of 3D points
-height = []             # flattened height field
-fields = {}             # dictionary of geometric fields
-
 
 # Set random seeds for reproducible results
 def seed_everything(seed):
@@ -227,11 +221,6 @@ H = heightmap(U, V, amplitude, frequency, phase, radial_strength, radial_falloff
 # Field construction
 # -----------------------------------------------------------------------------
 
-height_field = compute_height_field(H)
-slope_u, slope_v = compute_slope_field(H, U, V)
-
-
-
 # 3. Point grid (planar or surface sampled)
 if base_surface is not None:
     pts = sample_point_grid_from_surface(base_surface, U, V)
@@ -245,9 +234,5 @@ surf = surface_from_point_grid(pts_def)
 
 # Return outputs
 surface = surf
-points = [pt for row in pts_def for pt in row]
-height = H.flatten().tolist()
-slope_u = slope_u.flatten().tolist()
-slope_v = slope_v.flatten().tolist()
-U = U.flatten().tolist()
-V = V.flatten().tolist()
+divU = divU
+divV = divV
