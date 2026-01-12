@@ -191,9 +191,9 @@ This setup allows for a modular system that can be controlled in real-time withi
 
 ## Results
 - While the agent-based system successfully produced dynamic movement patterns, these results were not easily convertible into a viable panelization approach.
- ![Result 1](images/result_1.png)
- ![Result 2](images/result_2.png)
- ![Result 3](images/result_3.png)
+ ![Result 1, moving around peaks](images/result_1.png)
+ ![Result 2, agents moving](images/result_2.png)
+ ![Result 3, final curve](images/result_3.png)
 
 ## References
 
