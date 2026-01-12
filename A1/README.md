@@ -125,11 +125,11 @@ This approach demonstrates explicit RGB channel construction, layered field comp
 ---
 
 ## Results
-**RBG channels implemenation**
-![Visualization of explicit RGB channels](images/Figure_1_rgb_channels.png)
+**RBG channel implemenation**
+ ![Visualization of explicit RGB channels](images/Figure_1_rgb_channels.png)
 ---
 **Final generated image**
-![Final generated image](images/attractor_grid_pattern.png)
+ ![Final generated image](images/attractor_grid_pattern.png)
 
 ---
 
