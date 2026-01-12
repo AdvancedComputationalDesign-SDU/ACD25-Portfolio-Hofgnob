@@ -46,7 +46,9 @@ A3/
     ├── result_3_right.png                              # Results 3
     ├── result_3_front.png                              # Results 3
     ├── result_3_isometric.png                          # Results 3
-    └── result_3_parameters.png                         # Grasshopper parameters result 3
+    ├── result_3_parameters.png                         # Grasshopper parameters result 3
+    └── rendered_structure.png                          # Rendered structure
+
 ```
 ---
 
@@ -222,6 +224,8 @@ The changed parameter are highlighted in the tables below. Screenshot of the par
 | y_offset          | 0.0                 | 0.0                | 0.0                |
 | seed              | 666                 | 666                | 666                |
 
+**Example render**
+ ![Example rendered with panel thickness](images/rendered_structure.png)
 
 ## References
 
