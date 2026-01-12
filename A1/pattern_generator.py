@@ -49,7 +49,7 @@ for x in range(canvas_width):
         gradient = np.sin(nx * np.pi * 2) * np.cos(ny * np.pi * 2)
         noise_field = np.sin(nx * 12.3 + ny * 4.7)
         # Combine components with specific weights to form final field value
-        # field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
+        field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
         # Map field value to RGB channels using sine and cosine functions
         r = (np.sin(field * 2.0) + 1) * 0.5
         g = (np.cos(field * 1.5) + 1) * 0.5

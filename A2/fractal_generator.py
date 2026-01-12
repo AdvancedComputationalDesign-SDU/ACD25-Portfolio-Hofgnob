@@ -10,7 +10,6 @@ This script generates fractal patterns using recursive functions and geometric t
 # Import necessary libraries
 import math
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from shapely.geometry import LineString
 from shapely.affinity import rotate, translate
 import random
@@ -20,32 +19,32 @@ import random
 # ============================================================
 
 ### Randomness ###
-random_seed = 42                 # Seed for reproducible results
+random_seed = 122                 # Seed for reproducible results
 
 ### Wind field ###
 wind_vector = (5.0, 2.0)         # Global wind direction (x, y)
-global_wind_strength_range = (1.0, 7.0)  # Range for global wind strength
+global_wind_strength_range = (2.0, 10.0)  # Range for global wind strength
 wind_jitter_range = (-0.3, 0.3)  # Local turbulence per branch
 
 ### Attractor field ###
-num_attractors = 4               # Number of attractor points
+num_attractors = 3               # Number of attractor points
 attractor_strength = 1.0         # Base pull toward attractors
 attractor_radius = 100           # Radius for amplified attractor influence
 attractor_boost = 2.0            # Strength multiplier inside attractor radius
 
 ### Tree population ###
-num_trees_range = (4, 10)        # Min / max number of trees
-tree_spread_range = (500, 1000)  # Horizontal spread of tree origins
-min_start_distance = 150         # Minimum spacing between tree trunks
+num_trees_range = (3, 5)        # Min / max number of trees
+min_tree_distance = 250          # Minimum distance between tree trunks
+max_tree_distance = 350          # Maximum distance between tree trunks
 
 ### Recursive growth ###
-max_depth = 20                   # Maximum recursion depth
-base_branch_angle = 30            # Branching angle in degrees
-length_scaling_factor = 0.75     # Length reduction per generation
+max_depth = 15                   # Maximum recursion depth
+base_branch_angle = 35            # Branching angle in degrees
+length_scaling_factor = 0.8     # Length reduction per generation
 min_segment_length = 1.0          # Absolute cutoff for growth
 
 ### Canopy region ###
-canopy_height = 225               # Height above which branching increases
+canopy_height = 250               # Height above which branching increases
 canopy_branch_boost = 3           # Extra branches spawned in canopy
 
 ### Twig (secondary fractal) ###
@@ -54,11 +53,9 @@ twig_branches = 3                 # Number of twig branches
 twig_angle_spread = 40            # Angular spread of twig fractal
 twig_length_scale = 0.45          # Length scale for twig segments
 
-### Animation & drawing ###
-steps_per_frame = 4               # Growth steps per animation frame
-min_thickness = 0.3               # Minimum branch thickness
-max_thickness = 3.0               # Maximum branch thickness
-animation_interval = 120          # Milliseconds between frames
+### Drawing ###
+min_thickness = 0.5               # Minimum branch thickness
+max_thickness = 5.0               # Maximum branch thickness
 
 
 random.seed(random_seed)
@@ -66,6 +63,10 @@ global_wind_strength = random.uniform(*global_wind_strength_range)
 
 # Store all generated line segments with depth for thickness control
 line_list = []  # each entry: (LineString, depth)
+
+def get_color(depth, max_depth):
+    # Map recursion depth to a color using a perceptual colormap.
+    return plt.cm.viridis((depth / max_depth)**0.4)
 
 
 def generate_fractal(start_point, angle, length, depth, max_depth,
@@ -126,7 +127,7 @@ def generate_fractal(start_point, angle, length, depth, max_depth,
         if line.distance(existing) < min_distance:
             return []
         
-    line_list.append((line, depth))
+    line_list.append((line, depth + 1))
 
     new_length = length * length_scaling_factor
     # Increment depth
@@ -173,23 +174,27 @@ if __name__ == "__main__":
     # Random number of trees
     num_trees = random.randint(*num_trees_range)
 
-    # Horizontal spread for tree origins
-    spread = random.uniform(*tree_spread_range)
-
-    # Generate random starting points along the ground with minimum spacing
+    # Generate tree start points using min / max distance constraints
     start_points = []
-    attempts = 0
-    max_attempts = 1000
 
-    while len(start_points) < num_trees and attempts < max_attempts:
-        candidate = (random.uniform(-spread / 2, spread / 2), 0)
-        if all(abs(candidate[0] - p[0]) >= min_start_distance for p in start_points):
-            start_points.append(candidate)
-        attempts += 1
+    current_x = 0.0
+    for _ in range(num_trees):
+        if start_points:
+            step = random.uniform(min_tree_distance, max_tree_distance)
+            current_x += step
 
-    # Create attractor points
+        start_points.append((current_x, 0.0))
+
+    # Create attractor points aligned with tree span
+    tree_x_values = [p[0] for p in start_points]
+    min_x, max_x = min(tree_x_values), max(tree_x_values)
+
     attractors = [
-        (random.uniform(-500, 500), random.uniform(150, 350)) # x, y coordinates for attractors
+        (
+            random.uniform(min_x, max_x),
+            # y range for attractors
+            random.uniform(300, 450)
+        )
         for _ in range(num_attractors)
     ]
 
@@ -202,70 +207,74 @@ if __name__ == "__main__":
     for sp in start_points:
         growth_queue.append((sp, 90, 100, 0)) # start_point, angle, length, depth
 
+    # Fully grow the fractal (static, no animation)
+    while growth_queue:
+        start_point, angle, length, depth = growth_queue.pop(0)
 
-    # Storage for incremental drawing
-    drawn_lines = []
+        children = generate_fractal(
+            start_point=start_point,
+            angle=angle,
+            length=length,
+            depth=depth,
+            max_depth=max_depth,
+            angle_change=base_branch_angle,
+            length_scaling_factor=length_scaling_factor,
+            wind_vector=wind_vector,
+            attractors=attractors
+        )
 
-    def update(frame):
-        # Perform a fixed number of growth steps per frame
-        for _ in range(steps_per_frame):
-            if not growth_queue:
-                return
-
-            start_point, angle, length, depth = growth_queue.pop(0)
-
-            children = generate_fractal(
-                start_point=start_point,
-                angle=angle,
-                length=length,
-                depth=depth,
-                max_depth=max_depth,
-                angle_change=base_branch_angle,
-                length_scaling_factor=length_scaling_factor,
-                wind_vector=wind_vector,
-                attractors=attractors
-            )
-
-            for child in children:
-                growth_queue.append(child)
-
-        # Draw only newly added lines
-        while len(drawn_lines) < len(line_list):
-            line, depth = line_list[len(drawn_lines)]
-            x, y = line.xy
-
-            seg_length = line.length
-            linewidth = max(
-                min_thickness,
-                max_thickness * (seg_length / 100.0) ** 1.2
-            )
-
-            ax.plot(x, y, color='green', linewidth=linewidth)
-            drawn_lines.append(line)
+        for child in children:
+            growth_queue.append(child)
 
     # Visualization
     fig, ax = plt.subplots()
 
-    ani = FuncAnimation(
-        fig,
-        update,
-        interval=animation_interval,
-        repeat=False
-    )
+    # Draw all generated branches
+    for line, depth in line_list:
+        x, y = line.xy
+
+        seg_length = line.length
+        linewidth = max(
+            min_thickness,
+            max_thickness * (seg_length / 100.0) ** 1.2
+        )
+
+        color = get_color(depth, max_depth)
+        ax.plot(x, y, color=color, linewidth=linewidth)
 
     # Visualize attractors
-    ax.scatter(
-        [a[0] for a in attractors],
-        [a[1] for a in attractors],
-        color='red',
-        s=60,
-        marker='.',
-        zorder=5,
-        label='Attractors'
-    )
+    # ax.scatter(
+    #     [a[0] for a in attractors],
+    #     [a[1] for a in attractors],
+    #     color='red',
+    #     s=60,
+    #     marker='.',
+    #     zorder=4,
+    #     label='Attractors'
+    # )
 
-    # Optional: Customize the plot
-    ax.set_aspect('equal')
-    ax.legend(loc='lower left')
-    plt.axis('off')
-    plt.show()
+# Customize the plot
+# ax.legend(loc='lower left')
+ax.set_aspect('equal', adjustable='box')
+ax.axis('off')
+plt.margins(0)
+
+import os
+
+# Absolute path to the directory this script is in
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Absolute path to images folder next to the script
+images_dir = os.path.join(base_dir, "images")
+os.makedirs(images_dir, exist_ok=True)
+
+# Full output path
+output_path = os.path.join(images_dir, "result_4_mixed_wind_attractors_seed_122.png")
+
+plt.savefig(
+    output_path,
+    pad_inches=0,
+    dpi=300
+)
+
+plt.show()
