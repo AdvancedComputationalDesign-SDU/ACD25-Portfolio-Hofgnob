@@ -1,6 +1,6 @@
 
 ```md
-# <Your Name> — ACD-E25 Portfolio
+# Jesper Christensen Sørensen — ACD-E25 Portfolio
 
 ## Overview
 This portfolio documents four computational design studies developed for Advanced Computational Design. Across the series, I investigate <theme> through <methods/tools>, iterating through prototypes, parameter sweeps, and visual evaluation.
@@ -18,13 +18,4 @@ In A3, I design a canopy system driven by a heightmap/field and implemented in G
 
 ### A4: Agent-Based Modeling for Surface Panelization
 In A4, I use agent behaviors to sample and rationalize a surface into a panelized system. I define sensing rules and constraints (e.g., proximity, alignment, boundaries) and iterate on behaviors to balance local decisions with global coherence.
-
-## Highlights (optional)
-- **Technique:** <one technique you used across assignments>
-- **Best result:** <one outcome + where it appears (A#)>
-- **Next step:** <one concrete extension you would test next>
-
-## Contact (optional)
-- GitHub: <link>
-- Email: <email>
 ```
