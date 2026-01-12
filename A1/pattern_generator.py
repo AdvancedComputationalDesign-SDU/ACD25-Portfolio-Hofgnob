@@ -11,8 +11,6 @@ canvas_height = 500
 # Set canvas width equal to height to create a square canvas
 canvas_width = canvas_height
 # Create a 2D array of zeros with shape (canvas_height, canvas_width)
-canvas = np.zeros((canvas_height, canvas_width))
-# Create an explicit RGB canvas (H, W, 3)
 canvas_rgb = np.zeros((canvas_height, canvas_width, 3))
 
 # --------------- 2 ---------------
@@ -27,7 +25,6 @@ jitter = (np.random.rand(len(grid_points), 2) - 1.0) * 100 # Generate random jit
 # Add jitter to grid points to create final attractor positions
 attractors = grid_points + jitter
 
-
 # --------------- 3 ---------------
 # Define a function to calculate Euclidean distance from a point to all attractors
 def distance(point1, point2):
@@ -40,11 +37,11 @@ def distance(point1, point2):
 for x in range(canvas_width):
     # Loop through each pixel in the canvas along the y-axis
     for y in range(canvas_height):
-        # Calculate distances from current pixel to all attractor points
-        dists = distance(np.array([x, y]), attractors)
         # Normalize pixel coordinates to range [0, 1]
         nx = x / canvas_width
         ny = y / canvas_height
+        # Calculate distances from current pixel to all attractor points
+        dists = distance(np.array([x, y]), attractors)
         # Compute minimum and mean distances to attractors
         min_dist = np.min(dists)
         mean_dist = np.mean(dists)
@@ -52,7 +49,7 @@ for x in range(canvas_width):
         gradient = np.sin(nx * np.pi * 2) * np.cos(ny * np.pi * 2)
         noise_field = np.sin(nx * 12.3 + ny * 4.7)
         # Combine components with specific weights to form final field value
-        field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
+        # field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
         # Map field value to RGB channels using sine and cosine functions
         r = (np.sin(field * 2.0) + 1) * 0.5
         g = (np.cos(field * 1.5) + 1) * 0.5
@@ -61,11 +58,10 @@ for x in range(canvas_width):
         canvas_rgb[y, x, 1] = g
         canvas_rgb[y, x, 2] = b
 
-
-
 # --------------- 5 ---------------
 # Add independent noise per RGB channel
 noise_rgb = (np.random.rand(canvas_height, canvas_width, 3) - 0.5) * 0.5
+# Blend noise with the existing canvas RGB values
 canvas_rgb = canvas_rgb * 0.75 + noise_rgb * 0.25
 
 
