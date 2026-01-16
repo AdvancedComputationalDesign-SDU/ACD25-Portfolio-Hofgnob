@@ -1,57 +1,80 @@
 # Assignment 1: NumPy Array Manipulation for 2D Pattern Generation
 
-# Instructions:
-# - Write your code to generate patterns using NumPy.
-# - Use comments to explain your logic and the methods you're using.
-# - Feel free to be creative and explore different techniques.
-
+# Import necessary libraries
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Initialize your canvas (e.g., a 2D array filled with zeros)
-# You can adjust the size as needed
-canvas_height = 100  # Modify as desired
-canvas_width = 100   # Modify as desired
-canvas = np.zeros((canvas_height, canvas_width))
 
-# Apply array manipulations to create a pattern
-# Suggestions:
-# - Use slicing and indexing to create stripes or checkerboards
-# - Use mathematical functions to create gradients
-# - Combine multiple patterns
+# --------------- 1 ---------------
+# Set canvas height in pixels
+canvas_height = 500  
+# Set canvas width equal to height to create a square canvas
+canvas_width = canvas_height
+# Create a 2D array of zeros with shape (canvas_height, canvas_width)
+canvas_rgb = np.zeros((canvas_height, canvas_width, 3))
 
-# Example (you can modify or remove this):
-# Create horizontal stripes
-# for i in range(0, canvas_height, 20):
-#     canvas[i:i+10, :] = 255  # Assign a value to create a stripe
+# --------------- 2 ---------------
+# Attractor Influence Section with Grid Pattern
+num_attractors_per_row = 10 # Set the number of attractor points along the horizontal axis
+num_attractors_per_col = 5 # Set the number of attractor points along the vertical axis
+grid_x = np.linspace(0, canvas_width, num_attractors_per_row) # Create evenly spaced x-coordinates for attractor grid
+grid_y = np.linspace(0, canvas_height, num_attractors_per_col) # Create evenly spaced y-coordinates for attractor grid
+grid_points = np.array(np.meshgrid(grid_x, grid_y)).T.reshape(-1, 2) # Generate a grid of points from x and y coordinates and reshape to list of 2D points
+jitter = (np.random.rand(len(grid_points), 2) - 1.0) * 100 # Generate random jitter for each attractor point in range [-100, 100] pixels
 
-# Introduce randomness to add variability
-# Suggestions:
-# - Use np.random functions to add noise
-# - Randomly change pixel values within certain regions
+# Add jitter to grid points to create final attractor positions
+attractors = grid_points + jitter
 
-# Example:
-# noise = np.random.randint(0, 50, (canvas_height, canvas_width))
-# canvas = canvas + noise
+# --------------- 3 ---------------
+# Define a function to calculate Euclidean distance from a point to all attractors
+def distance(point1, point2):
+    # Compute squared differences, sum along axis, take square root
+    return np.sqrt(np.sum((point1 - point2) ** 2, axis=1))
 
-# Work with RGB channels
-# Convert your 2D canvas to a 3D array for RGB representation
-# Assign different colors to different parts of your pattern
 
-# Example:
-# canvas_rgb = np.stack((canvas, canvas, canvas), axis=2)
+# --------------- 4 ---------------
+# Loop through each pixel in the canvas along the x-axis
+for x in range(canvas_width):
+    # Loop through each pixel in the canvas along the y-axis
+    for y in range(canvas_height):
+        # Normalize pixel coordinates to range [0, 1]
+        nx = x / canvas_width
+        ny = y / canvas_height
+        # Calculate distances from current pixel to all attractor points
+        dists = distance(np.array([x, y]), attractors)
+        # Compute minimum and mean distances to attractors
+        min_dist = np.min(dists)
+        mean_dist = np.mean(dists)
+        # Add gradient and noise components to create pattern
+        gradient = np.sin(nx * np.pi * 2) * np.cos(ny * np.pi * 2)
+        noise_field = np.sin(nx * 12.3 + ny * 4.7)
+        # Combine components with specific weights to form final field value
+        field = 0.5 * np.sin(min_dist * 0.4) + 0.3 * gradient + 0.2 * noise_field
+        # Map field value to RGB channels using sine and cosine functions
+        r = (np.sin(field * 2.0) + 1) * 0.5
+        g = (np.cos(field * 1.5) + 1) * 0.5
+        b = (np.sin(field * 1.2 + np.pi/3) + 1) * 0.5
+        canvas_rgb[y, x, 0] = r
+        canvas_rgb[y, x, 1] = g
+        canvas_rgb[y, x, 2] = b
 
-# Assign colors
-# canvas_rgb[:, :, 0] = 255  # Modify the red channel
-# canvas_rgb[:, :, 1] = canvas_rgb[:, :, 1] * 0.5  # Modify the green channel
+# --------------- 5 ---------------
+# Add independent noise per RGB channel
+noise_rgb = (np.random.rand(canvas_height, canvas_width, 3) - 0.5) * 0.5
+# Blend noise with the existing canvas RGB values
+canvas_rgb = canvas_rgb * 0.75 + noise_rgb * 0.25
 
-# Ensure your array values are within the valid range (0-255)
-# canvas_rgb = np.clip(canvas_rgb, 0, 255)
 
-# Visualize and save your image
-# plt.imshow(canvas_rgb.astype(np.uint8))
-# plt.axis('off')  # Hide axis
-# plt.show()
+# --------------- 6 ---------------
+# Normalize canvas values to range [0, 1] to ensure valid color mapping
+canvas_normalized = (canvas_rgb - canvas_rgb.min()) / (canvas_rgb.max() - canvas_rgb.min())
 
-# Save the image to the images folder
-# plt.savefig('images/pattern_example.png', bbox_inches='tight', pad_inches=0)
+# --------------- 7 ---------------
+# Display true RGB image (no colormap)
+plt.imshow(canvas_normalized)
+# Hide axis ticks and labels for cleaner visualization
+plt.axis('off') 
+# Show the generated image
+plt.show()
+# Save the image to the images folder with tight bounding box and no padding
+# plt.savefig('images/attractor_grid_pattern.png', bbox_inches='tight', pad_inches=0)

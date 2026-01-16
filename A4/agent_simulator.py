@@ -1,55 +1,89 @@
 """
 Assignment 4: Agent-Based Model for Surface Panelization
-Author: Your Name
+Author: Jesper Christensen Sørensen
 
-Agent Simulator Template
+Agent Simulator
 
 Description:
-This file defines the structural outline for stepping and visualizing
-agents within Grasshopper. No simulation logic is implemented. All behavior
-(update, responding to signals, movement, etc.) must be
-implemented inside your Agent class in `agent_builder.py`.
-
-Note: This script is intended to be used within Grasshopper's Python
-scripting component.
+This component simulates the behavior of agents on a surface over time.
 """
 
 # -----------------------------------------------------------------------------
-# Imports (extend as needed)
+# Imports
 # -----------------------------------------------------------------------------
 import rhinoscriptsyntax as rs
-import numpy as np
 
 # -----------------------------------------------------------------------------
-# Retrieve agents from upstream Grasshopper component
+# Inputs (Grasshopper)
 # -----------------------------------------------------------------------------
-# Expected pattern (example):
-# agents = x.agents  # where `x` is a stateful component instance
-# Replace `x` and the attribute name with whatever your GH setup uses.
-
-agents = x.agents # access agents from the agents_builder component
+# agent_component  (reference to agent_builder component)
+# draw_vectors     (bool)
+# draw_paths       (bool)
 
 # -----------------------------------------------------------------------------
-# Step simulation (delegated to Agent methods)
+# Retrieve agents from builder component
 # -----------------------------------------------------------------------------
-# Suggested loop structure:
+
+agents = agent_component if agent_component is not None else None
+# -----------------------------------------------------------------------------
+# Step simulation
+# -----------------------------------------------------------------------------
 if agents is not None:
     for agent in agents:
         agent.update(agents)
 
 # -----------------------------------------------------------------------------
-# Visualization placeholders (Rhino + NumPy-friendly)
+# Visualization
 # -----------------------------------------------------------------------------
-# Minimal outputs:
-# - Points representing agent positions
-# - Vectors, polylines, trails, or any custom debug geometry
+points = []  # agent positions
+vectors = []  # velocity vectors
+curves = []  # trails/curves
 
-P = []  # list of position points (e.g., rs.AddPoint(...))
-V = []  # list of velocity vectors or other debug geometry
+if agents is not None:
+    for agent in agents:
 
-# Example geometry generation (uncomment and adapt):
-for agent in agents:
-    P.append(rs.AddPoint(agent.position[0], agent.position[1], agent.position[2]))
-    # create a line or vector visualization from pos in direction vel
-    end = agent.position + agent.velocity
-    V.append(rs.AddLine(rs.coerce3dpoint(pos), rs.coerce3dpoint(end)))
+        # draw position
+        if agent.position is not None:
+            points.append(rs.AddPoint(agent.position))
+
+        # draw velocity vector on surface
+        if draw_vectors:
+            try:
+                # real surface domains
+                dom_u = rs.SurfaceDomain(agent.surface, 0)
+                dom_v = rs.SurfaceDomain(agent.surface, 1)
+
+                # start at the agent's true 3D position (already evaluated on surface)
+                start = agent.position
+
+                # take a small step in normalized UV along the velocity direction
+                u2 = agent.u + agent.velocity[0]
+                v2 = agent.v + agent.velocity[1]
+
+                # clamp to normalized domain
+                u2 = max(0.0, min(1.0, u2))
+                v2 = max(0.0, min(1.0, v2))
+
+                # map normalized UV to real surface UV
+                u2_real = dom_u[0] + u2 * (dom_u[1] - dom_u[0])
+                v2_real = dom_v[0] + v2 * (dom_v[1] - dom_v[0])
+
+                # evaluate end point on surface
+                end = rs.EvaluateSurface(agent.surface, u2_real, v2_real)
+
+                if start and end:
+                    vectors.append(rs.AddLine(start, end))
+            except:
+                pass
+
+        # draw trail/curves
+        if draw_paths and len(agent.path) > 1:
+            try:
+                curves.append(rs.AddPolyline(agent.path))
+            except:
+                pass
+
+# Outputs (Grasshopper)
+points = points
+vectors = vectors
+curves = curves
